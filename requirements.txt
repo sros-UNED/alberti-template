@@ -1,0 +1,10 @@
+numpy
+pandas
+simpletransformers
+transformers
+tokenizers
+tensorboard
+tensorboardX
+wandb
+averell
+fasttext
