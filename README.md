@@ -1,5 +1,4 @@
-# alberti-template
-alBERTi template code
+# alBERTi template code
 
 Start a Google Cloud Deep Learning machine with PyTorch 1.4 and Debian 9 and run the next command (the hostname of the machine will be used to tag the experiment):
 
