@@ -22,6 +22,7 @@ from sklearn.preprocessing import LabelEncoder
 
 truthy_values = ("true", "1", "y", "yes")
 TAG = os.environ.get("TAG", "bertsification")
+# Este es el experimtento y el modelo que vamos usar ?
 MODELNAME = os.environ.get("MODELNAME", "bert;bert-base-multilingual-cased")
 OVERWRITE = os.environ.get("OVERWRITE", "False").lower() in truthy_values
 logging.basicConfig(level=logging.INFO, filename=time.strftime("models/{}-%Y-%m-%dT%H%M%S.log".format(TAG)))
@@ -50,21 +51,24 @@ def clean_text(string):
 def clean_labels(label):
     return "unknown" if str(label) == "None" else label
 
-
+# SE carga en el fichero disco compartido en GCLOUD ***
 def prepare_data():
     df = (pd
-        .read_csv(...)
-        .rename(...)
+        .read_csv('/shared/stanzas-evaluation.csv')
+        # Srenombrar las columnas
+        .rename(columns={"Stanzas_text":"text", "ST_Correct":"stanza"})
         .assign(
-            text=lambda x: x["text"].apply(...),
-            stanza=lambda x: x["stanza"].apply(...),
+            text=lambda x: x["text"].apply(clean_text(x)),
+            stanza=lambda x: x["stanza"].apply(clean_text(x)),
         )
     )
+
+    #Codificar las variable del 0 al 46
     label_encoder = LabelEncoder()
-    label_encoder.fit(...)
-    df["labels"] = ...
+    label_encoder.fit(df["stanza"])
+    df["labels"] =label_encoder.transform(df["stanzas"])
     train_df, eval_df = train_test_split(
-        df, stratify=..., test_size=0.25, random_state=42
+        df, stratify=df["labels"], test_size=0.25, random_state=42
     )
     return train_df, eval_df, label_encoder
 
@@ -78,8 +82,8 @@ def train_model(train_df, num_labels):
     logging.info("Starting training of {}".format(model_name))
     run = wandb.init(project=model_output.split("/")[-1], reinit=True)
 
-    model = ...(
-        ..., ..., num_labels=..., args={
+    model = ClassificationModel(
+        model_type, model_name, num_labels=num_labels, args={
             'output_dir': model_output,
             'best_model_dir': '{}/best'.format(model_output),
             'evaluate_during_training': False,
@@ -98,15 +102,15 @@ def train_model(train_df, num_labels):
             "n_gpu": 1,
     })
     # train the model
-    model.train_model(...)
+    model.train_model(train_df)
     return model, run
 
 
 def eval_model(model, eval_df, run):
-    result, *_ = model.eval_model(...)
+    result, *_ = model.eval_model(eval_df)
     logging.info("Results: {}".format(str(result)))
 
-    eval_df["predicted"], *_ = model.predict(...)
+    eval_df["predicted"], *_ = model.predict(eval_df["text"])
 
     acc = sum(eval_df.labels == eval_df.predicted) / eval_df.labels.size
     logging.info("Accuracy: {}".format(acc))
@@ -117,9 +121,9 @@ def eval_model(model, eval_df, run):
 
 def main() -> None:
     logging.info("Starting...")
-    train_df, eval_df, label_encoder = ...()
-    model, run = ...(train_df, len(label_encoder.classes_))
-    ...(model, eval_df, run)
+    train_df, eval_df, label_encoder = prepare_data()
+    model, run = train_model(train_df, len(label_encoder.classes_))
+    eval_model(model, eval_df, run)
     logging.info("Done.")
 
 
